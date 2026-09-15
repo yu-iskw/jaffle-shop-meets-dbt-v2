@@ -1,0 +1,2 @@
+# The standard dbt v2 distribution includes the embedded docs UI.
+dbt==2.0.0rc218

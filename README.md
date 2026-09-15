@@ -12,6 +12,70 @@ This README will guide you through setting up the project on dbt Cloud. Working 
 
 Ready to go? Grab some water and a nice snack, and let's dig in!
 
+## Local dbt v2 + DuckDB sandbox
+
+This repository includes a pinned dbt v2 prerelease and a local DuckDB profile.
+Keep it isolated from any other dbt installation by using the dedicated virtual
+environment. The standard dbt distribution is used instead of the Apache-only
+`dbt-core` package because it includes the embedded UI required for dbt docs v2.
+
+```bash
+make setup-dbt-v2
+source .venv-dbt-v2/bin/activate
+dbt --version
+```
+
+The local project configuration uses the git-ignored `profiles.yml` file at the
+repository root and writes to the git-ignored `jaffle_shop.duckdb` file.
+Run dbt from the repository root:
+
+```bash
+dbt debug --profiles-dir .
+dbt deps --profiles-dir .
+dbt seed --profiles-dir . --full-refresh --vars '{load_source_data: true}'
+make build-dbt-v2
+```
+
+Generate the static dbt docs v2 site with `make docs-generate-dbt-v2`. To
+explore the build metadata locally, run `make docs-serve-dbt-v2`, then open
+<http://127.0.0.1:8580>.
+
+When you are finished, run `deactivate`. To enter the environment again later,
+run `source .venv-dbt-v2/bin/activate`. To remove the virtual environment,
+local package cache, DuckDB database, and dbt build artifacts, run:
+
+```bash
+make clean-dbt-v2
+```
+
+## dbt Charts playground
+
+The Jaffle Shop board in [`charts/jaffle_shop_overview.yml`](charts/jaffle_shop_overview.yml)
+uses [dbt Charts](https://dbtcharts.com/) to query the same local DuckDB database.
+It includes a minimum-order-value control, latest-month KPIs, a revenue trend,
+location and product breakdowns, and a top-customer detail table.
+
+dbt Charts is installed as a separate `uv` tool rather than into the dbt v2
+virtual environment. This keeps its Python dbt adapter dependencies isolated
+while it reads the dbt profile and current `target/manifest.json` to resolve
+the board's `ref()` calls.
+
+After seeding and building the local project, install and use the board:
+
+```bash
+make setup-dbt-charts
+make validate-dbt-charts
+make render-dbt-charts
+make serve-dbt-charts
+```
+
+The render command creates [`renders/jaffle_shop_overview.html`](renders/jaffle_shop_overview.html)
+and [`renders/jaffle_shop_overview.png`](renders/jaffle_shop_overview.png). The
+server exposes the interactive version at
+<http://127.0.0.1:3000/jaffle_shop_overview/>. Re-run `make build-dbt-v2` after
+changing models so the dbt manifest and DuckDB relations stay current. Remove
+generated renders with `make clean-dbt-charts`.
+
 <div>
  <a href="https://www.loom.com/share/a90b383eea594a0ea41e91af394b2811?t=0&sid=da832f06-c08e-43e7-acae-a2a3d8d191bd">
    <p>Welcome to the Jaffle Shop - Watch Intro Video</p>

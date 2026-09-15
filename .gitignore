@@ -1,4 +1,6 @@
 .venv
+.venv-dbt-v2/
+.uv-cache/
 venv
 .env
 env
@@ -7,6 +9,8 @@ target/
 dbt_packages/
 logs/
 profiles.yml
+*.duckdb
+*.duckdb.wal
 
 .DS_Store
 
@@ -15,3 +19,6 @@ profiles.yml
 .ruff_cache
 __pycache__
 dbt_internal_packages/
+renders/
+.venv/
+__pycache__/

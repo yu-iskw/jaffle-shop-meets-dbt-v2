@@ -1,0 +1,234 @@
+title: Jaffle Shop performance overview
+notes: >
+  A live DuckDB dashboard for exploring Jaffle Shop's order volume, revenue,
+  profitability, locations, products, and customer mix.
+
+# This connection reuses the local dbt profile in ../profiles.yml. The ref()
+# below resolves against dbt's current target/manifest.json.
+source: jaffle_shop
+
+variables:
+  minimum_order_total:
+    input: slider
+    label: Minimum order total (USD)
+    notes: >
+      Exclude orders below this total from every metric in the dashboard so the
+      effect of focusing on higher-value orders is easy to explore.
+    min: 0
+    max: 50
+    step: 1
+    default: 0
+
+queries:
+  monthly_performance:
+    notes: >
+      Month-level order volume, revenue, cost, and gross profit across the
+      Jaffle Shop modelled orders relation.
+    sql: |
+      SELECT
+        DATE_TRUNC('month', ordered_at) AS order_month,
+        COUNT(*) AS order_count,
+        SUM(order_total) AS revenue,
+        SUM(order_cost) AS cost,
+        SUM(order_total) - SUM(order_cost) AS gross_profit
+      FROM {{ ref('orders') }}
+      WHERE order_total >= {{ minimum_order_total }}
+      GROUP BY 1
+      ORDER BY 1
+
+  latest_month_kpis:
+    notes: >
+      The latest month of the filtered order history, with month-over-month
+      changes for revenue and order count plus gross margin.
+    sql: |
+      WITH monthly AS (
+        SELECT
+          DATE_TRUNC('month', ordered_at) AS order_month,
+          COUNT(*) AS order_count,
+          SUM(order_total) AS revenue,
+          SUM(order_total) - SUM(order_cost) AS gross_profit
+        FROM {{ ref('orders') }}
+        WHERE order_total >= {{ minimum_order_total }}
+        GROUP BY 1
+      ),
+      with_prior_month AS (
+        SELECT
+          *,
+          LAG(revenue) OVER (ORDER BY order_month) AS prior_revenue,
+          LAG(order_count) OVER (ORDER BY order_month) AS prior_order_count
+        FROM monthly
+      )
+      SELECT
+        order_month,
+        revenue,
+        (revenue - prior_revenue) / NULLIF(prior_revenue, 0) AS revenue_change,
+        order_count,
+        (order_count - prior_order_count) / NULLIF(prior_order_count, 0) AS order_count_change,
+        gross_profit / NULLIF(revenue, 0) AS gross_margin
+      FROM with_prior_month
+      ORDER BY order_month DESC
+      LIMIT 1
+
+  performance_by_location:
+    notes: >
+      Revenue, order count, and gross profit for each Jaffle Shop location at
+      the selected minimum order total.
+    sql: |
+      SELECT
+        l.location_name,
+        COUNT(*) AS order_count,
+        SUM(o.order_total) AS revenue,
+        SUM(o.order_total) - SUM(o.order_cost) AS gross_profit
+      FROM {{ ref('orders') }} AS o
+      INNER JOIN {{ ref('locations') }} AS l USING (location_id)
+      WHERE o.order_total >= {{ minimum_order_total }}
+      GROUP BY 1
+      ORDER BY revenue DESC
+
+  product_type_mix:
+    notes: >
+      Ordered item count and item-price revenue by product type for orders at
+      the selected minimum order total.
+    sql: |
+      SELECT
+        p.product_type,
+        COUNT(*) AS item_count,
+        SUM(oi.product_price) AS item_revenue
+      FROM {{ ref('order_items') }} AS oi
+      INNER JOIN {{ ref('orders') }} AS o USING (order_id)
+      INNER JOIN {{ ref('products') }} AS p USING (product_id)
+      WHERE o.order_total >= {{ minimum_order_total }}
+      GROUP BY 1
+      ORDER BY item_revenue DESC
+
+  top_customers:
+    notes: >
+      The ten customers with the greatest revenue from orders meeting the
+      selected minimum order total.
+    sql: |
+      SELECT
+        c.customer_name,
+        COUNT(*) AS order_count,
+        SUM(o.order_total) AS revenue,
+        AVG(o.order_total) AS average_order_total
+      FROM {{ ref('orders') }} AS o
+      INNER JOIN {{ ref('customers') }} AS c USING (customer_id)
+      WHERE o.order_total >= {{ minimum_order_total }}
+      GROUP BY 1
+      ORDER BY revenue DESC
+      LIMIT 10
+
+charts:
+  revenue_kpi:
+    notes: >
+      Revenue in the most recent month, with the percentage change from the
+      prior month at the selected minimum order total.
+    type: kpi
+    query: latest_month_kpis
+    label: Revenue, latest month
+    value: revenue
+    style:
+      value:
+        format: currency_whole
+    support:
+      value: revenue_change
+      label: vs prior month
+      format: percent_delta
+
+  orders_kpi:
+    notes: >
+      Count of orders in the most recent month, with the percentage change from
+      the prior month at the selected minimum order total.
+    type: kpi
+    query: latest_month_kpis
+    label: Orders, latest month
+    value: order_count
+    style:
+      value:
+        format: integer
+    support:
+      value: order_count_change
+      label: vs prior month
+      format: percent_delta
+
+  gross_margin_kpi:
+    notes: >
+      Gross profit as a share of revenue in the latest month at the selected
+      minimum order total.
+    type: kpi
+    query: latest_month_kpis
+    label: Gross margin, latest month
+    value: gross_margin
+    style:
+      value:
+        format: percent_whole
+
+  revenue_trend:
+    notes: Monthly revenue from all modelled Jaffle Shop orders.
+    type: line
+    query: monthly_performance
+    title: Monthly revenue
+    x: order_month
+    y: revenue
+    style:
+      number_format: currency
+      time_format: "%b %Y"
+      axis_x:
+        ticks:
+          count: 6
+        labels:
+          angle: -45
+
+  revenue_by_location:
+    notes: Revenue by operating location at the selected minimum order total.
+    type: bar
+    query: performance_by_location
+    title: Revenue by location
+    height: 300
+    x: location_name
+    y: revenue
+    style:
+      number_format: currency
+
+  revenue_by_product_type:
+    notes: >
+      Item-price revenue split between Jaffles and beverages for orders at the
+      selected minimum order total.
+    type: bar
+    query: product_type_mix
+    title: Item revenue by product type
+    height: 300
+    x: product_type
+    y: item_revenue
+    style:
+      number_format: currency
+
+  top_customers_table:
+    notes: >
+      Ranked detail for the customers generating the most selected-order
+      revenue, including order count and average order total.
+    type: table
+    query: top_customers
+    title: Top customers by revenue
+    style:
+      columns:
+        customer_name:
+          label: Customer
+        order_count:
+          label: Orders
+          format: integer
+          align: right
+        revenue:
+          label: Revenue (USD)
+          format: currency_whole
+          align: right
+        average_order_total:
+          label: Average order (USD)
+          format: currency_full
+          align: right
+
+rows:
+  - cols: [revenue_kpi, orders_kpi, gross_margin_kpi]
+  - revenue_trend
+  - cols: [revenue_by_location, revenue_by_product_type]
+  - top_customers_table
