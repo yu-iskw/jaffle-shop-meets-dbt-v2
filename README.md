@@ -48,6 +48,38 @@ local package cache, DuckDB database, and dbt build artifacts, run:
 make clean-dbt-v2
 ```
 
+## Per-customer Jev marketing (DuckDB UDF)
+
+Fusion's DuckDB adapter cannot register Python UDFs. The marketing demo uses a
+**separate dbt-core + dbt-duckdb environment** that registers
+`jev_market_customer(state_json)` on the DuckDB connection. A SQL model then
+calls that UDF for next-best-offer, promo propensity, and campaign priority.
+
+Set `JEV_API_KEY` (or `TYPESAFE_API_KEY`) in the git-ignored `.env`. After local
+marts exist (`make build-dbt-v2`):
+
+```bash
+make test-jev
+make build-jev-udf
+```
+
+`make build-jev-udf` scores 20 customers by default (`jev_customer_limit`).
+Each row is one TypeSafe `system_one` call. Cloud warehouse jobs skip the model
+unless `enable_jev_udf_models` is true.
+
+For the Medium article experiment, capture per-row latency and response JSON:
+
+```bash
+make experiment-jev-article
+```
+
+This writes `article/artifacts/jev_responses.jsonl` and
+`jev_latency_summary.json`, and loads `raw.jev_benchmark_runs` for
+`analyses/jev_latency_summary.sql`. See `article/medium-final.md` for the
+Medium article.
+
+`make build-dbt-v2` stays on Fusion and does not load the UDF plugin.
+
 ## dbt Charts playground
 
 The Jaffle Shop board in [`charts/jaffle_shop_overview.yml`](charts/jaffle_shop_overview.yml)
@@ -286,17 +318,17 @@ You'll need to be working on the command line for this option. If you're more co
 3. Create a new virtual environment in your project (I like to call mine `.venv`) and activate it, then install the project's dependencies in it. This will install the `jafgen` tool which you can use to generate the larger datasets. Then install `dbt-core` and your warehouse's adapter. We install dbt Core temporarily because by connecting directly to your warehouse, it can upload larger file sizes than the dbt Cloud server[^1]. You can do this manually or with `task`:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -r requirements.txt
-python3 -m pip install dbt-core dbt-[your warehouse adapter] # e.g. dbt-bigquery
+uv sync --no-default-groups --group dev
+uv run --no-default-groups --with dbt-core --with dbt-[your warehouse adapter] \
+  dbt seed --full-refresh --vars '{"load_source_data": true}'
 ```
 
 **OR**
 
 ```bash
 task venv
-task install DB=[name of warehouse] # e.g. task install DB=bigquery
+task install
+task seed DB=[name of warehouse] # e.g. task seed DB=bigquery
 ```
 
 > [!NOTE]

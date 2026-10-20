@@ -34,5 +34,10 @@ models:
     marts:
       +materialized: table
 
+vars:
+  enable_jev_udf_models: false
+  jev_customer_limit: 20
+  jev_recent_orders: 10
+
 flags:
   require_generic_test_arguments_property: true

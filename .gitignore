@@ -1,5 +1,6 @@
 .venv
 .venv-dbt-v2/
+.venv-dbt-duckdb/
 .uv-cache/
 venv
 .env
@@ -8,7 +9,7 @@ env
 target/
 dbt_packages/
 logs/
-profiles.yml
+/profiles.yml
 *.duckdb
 *.duckdb.wal
 
@@ -20,5 +21,7 @@ profiles.yml
 __pycache__
 dbt_internal_packages/
 renders/
+article/artifacts/*
+!article/artifacts/README.md
 .venv/
 __pycache__/

@@ -1,0 +1,36 @@
+models:
+  - name: int_customer_marketing_actions
+    description: Per-customer next-best-offer and campaign priority from the jev_market_customer DuckDB UDF. Disabled unless enable_jev_udf_models is true.
+    data_tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "likely_to_redeem_promo >= 0 and likely_to_redeem_promo <= 1"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "next_best_offer_confidence >= 0 and next_best_offer_confidence <= 1"
+    columns:
+      - name: customer_id
+        description: Customer unique key. Joins to the customers mart.
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('customers')
+                field: customer_id
+      - name: next_best_offer
+        description: Jev Choice for the next marketing action.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  ["winback", "beverage_upsell", "jaffle_feature", "loyalty_reward", "hold"]
+      - name: next_best_offer_confidence
+        description: Confidence in the next-best-offer choice, from 0 to 1.
+      - name: likely_to_redeem_promo
+        description: Jev Noul probability the customer would redeem a discount.
+      - name: campaign_priority
+        description: Jev Score across low, medium, and high campaign priority.
+      - name: campaign_priority_confidence
+        description: Confidence in the campaign priority score, from 0 to 1.

@@ -1,0 +1,12 @@
+default:
+  target: jev
+  outputs:
+    jev:
+      type: duckdb
+      path: jaffle_shop.duckdb
+      schema: main
+      threads: 1
+      module_paths:
+        - src
+      plugins:
+        - module: jaffle_shop_core_v2.jev_plugin
